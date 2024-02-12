@@ -1,6 +1,7 @@
 import os
 import argparse
 import sys
+from omegaconf import OmegaConf
 
 
 with open("path.txt", "w") as file:
@@ -11,10 +12,6 @@ with open("path.txt", "w") as file:
 
 parser = argparse.ArgumentParser(description='Renders glbs')
 parser.add_argument(
-    '--blender_root', type=str, default='/Applications/Blender.app/Contents/MacOS/Blender',
-    help='path to blender executable')
-
-parser.add_argument(
     '--config', type=str, default='configs/base.yaml',
     help='path to blender executable')
 
@@ -22,9 +19,11 @@ parser.add_argument(
 opt = parser.parse_args()
 
 
+config_file = OmegaConf.load(opt.config)
 
 
-render_cmd = f'PYTHONPATH=/Users/jtremblay/miniconda3/bin/python {opt.blender_root} -b --python-use-system-env -P blender_scripts/urdf_rendering.py -- --config {opt.config}' 
+
+render_cmd = f'PYTHONPATH=/Users/jtremblay/miniconda3/bin/python {config_file.blender_path} -b --python-use-system-env -P blender_scripts/urdf_rendering.py -- --config {opt.config}' 
 
 
 # render_cmd = render_cmd + ' > tmp.out'
