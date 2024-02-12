@@ -1,0 +1,6 @@
+[submodule "models/differentiable-robot-model"]
+	path = models/differentiable-robot-model
+	url = git@github.com:facebookresearch/differentiable-robot-model.git
+[submodule "models/reachy_description"]
+	path = models/reachy_description
+	url = git@github.com:aubrune/reachy_description.git
