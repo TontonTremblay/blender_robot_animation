@@ -1,5 +1,7 @@
 # Animated robot with rotating camera
 
+
+
 You need to specify the path to blender in the config file, `configs/base.yaml`. 
 
 The robot assets are downloaded as submodules: 
@@ -12,6 +14,11 @@ You can download hdri env maps [here](https://drive.google.com/file/d/1lp36MgTlS
 You can download the texture assets with: 
 ```
 python download_textures.py
+```
+
+Check the config file where the data will be stored. But you should be able to run: 
+```
+python render_mac.py
 ```
 
 # Installation 
