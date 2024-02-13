@@ -1,0 +1,17 @@
+blender_path: "/Applications/Blender.app/Contents/MacOS/Blender"
+seed: 190191
+render:
+  nb_frames: 100 
+  resolution: 1024
+  camera:
+    elevation: [45,90]
+    theta: 180
+    nb_anchors: 10
+    distance_center: 4
+content:
+  urdf_content_path: "/Users/jtremblay/code/blender_robot_animation/models/differentiable-robot-model/diff_robot_data/kuka_iiwa/"
+  urdf_path: "urdf/iiwa7.urdf"
+  hdri_env_map: "/Users/jtremblay/code/blender_robot_animation/models/hdris/"
+  materials_path: "/Users/jtremblay/code/holodeck_blender/assets/textures/"
+  random_material: True
+output_path: "/Users/jtremblay/code/blender_robot_animation/renders/kuka_iiwa/"
