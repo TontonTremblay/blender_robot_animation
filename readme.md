@@ -1,5 +1,6 @@
 # Animated robot with rotating camera
 
+<img width="406" alt="image" src="https://github.com/TontonTremblay/blender_robot_animation/assets/5629088/8d9e4acc-b926-4a72-9cb0-df3c54cd92f4">
 
 
 You need to specify the path to blender in the config file, `configs/base.yaml`. 
