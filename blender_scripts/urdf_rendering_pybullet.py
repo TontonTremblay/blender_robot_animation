@@ -26,6 +26,9 @@ import yaml
 from bpy_extras.image_utils import load_image
 from omegaconf import OmegaConf
 
+import pybullet
+import pybullet as p
+import pybullet_data
 
 parser = argparse.ArgumentParser(description='Renders given obj file by rotation a camera around it.')
 parser.add_argument(
@@ -227,14 +230,213 @@ bpy.context.scene.cycles.use_denoising = True
 # urdf_content_path = "/Users/jtremblay/code/yourdfpy/robot/kitchen_urdf/"
 # kitchen = URDF.load(f"{urdf_content_path}/kitchen.urdf")
 
-# JACO
-urdf_content_path = config_file.content.urdf_content_path
+# # JACO
+# urdf_content_path = config_file.content.urdf_content_path
 
-kitchen = URDF.load(f"{urdf_content_path}/{config_file.content.urdf_path}")
+# kitchen = URDF.load(f"{urdf_content_path}/{config_file.content.urdf_path}")
 
-# reachy
-# urdf_content_path = "/Users/jtremblay/code/blender_robot_animation/models/reachy_description/"
-# kitchen = URDF.load(f"{urdf_content_path}/reachy.URDF")
+
+def update_visual_objects(object_ids, pkg_path, nv_objects=None,i_frame=-1):
+    
+    # object ids are in pybullet engine
+    # pkg_path is for loading the object geometries
+    # nv_objects refers to the already entities loaded, otherwise it is going 
+    # to load the geometries and create entities. 
+    if nv_objects is None:
+        nv_objects = { }
+    for object_id in object_ids:
+        for idx, visual in enumerate(p.getVisualShapeData(object_id)):
+            # Extract visual data from pybullet
+            objectUniqueId = visual[0]
+            linkIndex = visual[1]
+            visualGeometryType = visual[2]
+            dimensions = visual[3]
+            meshAssetFileName = visual[4]
+            local_visual_frame_position = visual[5]
+            local_visual_frame_orientation = visual[6]
+            rgbaColor = visual[7]
+
+            if linkIndex == -1:
+                # dynamics_info = p.getDynamicsInfo(object_id,-1)
+                # inertial_frame_position = dynamics_info[3]
+                # inertial_frame_orientation = dynamics_info[4]
+                # base_state = p.getBasePositionAndOrientation(objectUniqueId)
+                # world_link_frame_position = base_state[0]
+                # world_link_frame_orientation = base_state[1]    
+                # m1 = nv.translate(nv.mat4(1), nv.vec3(inertial_frame_position[0], inertial_frame_position[1], inertial_frame_position[2]))
+                # m1 = m1 * nv.mat4_cast(nv.quat(inertial_frame_orientation[3], inertial_frame_orientation[0], inertial_frame_orientation[1], inertial_frame_orientation[2]))
+                # m2 = nv.translate(nv.mat4(1), nv.vec3(world_link_frame_position[0], world_link_frame_position[1], world_link_frame_position[2]))
+                # m2 = m2 * nv.mat4_cast(nv.quat(world_link_frame_orientation[3], world_link_frame_orientation[0], world_link_frame_orientation[1], world_link_frame_orientation[2]))
+                # m = nv.inverse(m1) * m2
+                # q = nv.quat_cast(m)
+                dynamics_info = p.getDynamicsInfo(object_id, -1)
+                inertial_frame_position = dynamics_info[3]
+                inertial_frame_orientation = dynamics_info[4]
+                base_state = p.getBasePositionAndOrientation(objectUniqueId)
+                world_link_frame_position = base_state[0]
+                world_link_frame_orientation = base_state[1]
+
+                m1 = np.eye(4)
+                m1[:3, 3] = inertial_frame_position
+                m1[:3, :3] = pyrr.matrix44.create_from_quaternion(inertial_frame_orientation)[:3, :3]
+
+                m2 = np.eye(4)
+                m2[:3, 3] = world_link_frame_position
+                m2[:3, :3] = pyrr.matrix44.create_from_quaternion(world_link_frame_orientation)[:3, :3]
+
+                m = np.linalg.inv(m1) @ m2
+                # q = pyrr.quaternion.matrix_to_quaternion(m)                
+                q = pyrr.quaternion.create_from_matrix(m)
+                world_link_frame_position = m[:3,3]
+                world_link_frame_orientation = q
+
+            else:
+                linkState = p.getLinkState(objectUniqueId, linkIndex)
+                world_link_frame_position = linkState[4]
+                world_link_frame_orientation = linkState[5]
+            
+            # Name to use for components
+            object_name = f"{objectUniqueId}_{linkIndex}_{idx}"
+
+            meshAssetFileName = meshAssetFileName.decode('UTF-8')
+            if object_name not in nv_objects:
+                # Create mesh component if not yet made
+                if visualGeometryType == p.GEOM_MESH:
+                    # nv_objects[object_name] = nv.import_scene(
+                    #     pkg_path + "/" + meshAssetFileName
+                    # )
+
+                    data_2_load = os.path.join(f'{pkg_path}',meshAssetFileName)
+                    # print(data_2_load)
+                    file_type = data_2_load.split('.')[-1]
+                    # bpy.ops.import_scene.obj(filepath=data_2_load)
+                    if file_type.lower() == 'obj':
+                        bpy.ops.wm.obj_import(filepath=data_2_load)
+                    elif file_type.lower() == 'dae':
+                        bpy.ops.wm.collada_import(filepath=data_2_load)
+                    elif file_type.lower() == 'stl':
+                        bpy.ops.wm.stl_import(filepath=data_2_load)
+
+                    delete_all_lights()
+                    delete_all_cameras()
+
+                    selected_objects = bpy.context.selected_objects
+
+                    # Deselect all objects
+                    bpy.ops.object.select_all(action='DESELECT')
+
+                    # Select mesh objects among the selected objects
+                    for obj in selected_objects:
+                        if obj.type == 'MESH':
+                            print(obj.name)
+                            obj.select_set(True)
+                    # Join selected mesh objects
+                    bpy.ops.object.join()
+
+                    bpy.ops.object.shade_smooth(use_auto_smooth=True)
+                            
+                    obj = bpy.context.selected_objects[0]
+                    obj.name = object_name
+                    bpy.context.view_layer.objects.active = obj
+
+                    nv_objects[object_name] = obj
+
+                    add_annotation(obj,link_name= object_name)
+
+
+                # elif visualGeometryType == p.GEOM_BOX:
+                #     assert len(meshAssetFileName) == 0
+                #     nv_objects[object_name] = nv.entity.create(
+                #         name=object_name,
+                #         mesh=nv.mesh.create_box(
+                #             name=object_name,
+                #             # half dim in NVISII v.s. pybullet
+                #             size=nv.vec3(dimensions[0] / 2, dimensions[1] / 2, dimensions[2] / 2)
+                #         ),
+                #         transform=nv.transform.create(object_name),
+                #         material=nv.material.create(object_name),
+                #     )
+                # elif visualGeometryType == p.GEOM_CYLINDER:
+                #     assert len(meshAssetFileName) == 0
+                #     length = dimensions[0]
+                #     radius = dimensions[1]
+                #     nv_objects[object_name] = nv.entity.create(
+                #         name=object_name,
+                #         mesh=nv.mesh.create_cylinder(
+                #             name=object_name,
+                #             radius=radius,
+                #             size=length / 2,    # size in nvisii is half of the length in pybullet
+                #         ),
+                #         transform=nv.transform.create(object_name),
+                #         material=nv.material.create(object_name),
+                #     )
+                # elif visualGeometryType == p.GEOM_SPHERE:
+                #     assert len(meshAssetFileName) == 0
+                #     nv_objects[object_name] = nv.entity.create(
+                #         name=object_name,
+                #         mesh=nv.mesh.create_sphere(
+                #             name=object_name,
+                #             radius=dimensions[0],
+                #         ),
+                #         transform=nv.transform.create(object_name),
+                #         material=nv.material.create(object_name),
+                #     )
+                else:
+                    # other primitive shapes currently not supported
+                    continue
+
+            if object_name not in nv_objects: continue
+
+            # # Link transform
+            # m1 = nv.translate(nv.mat4(1), nv.vec3(world_link_frame_position[0], world_link_frame_position[1], world_link_frame_position[2]))
+            # m1 = m1 * nv.mat4_cast(nv.quat(world_link_frame_orientation[3], world_link_frame_orientation[0], world_link_frame_orientation[1], world_link_frame_orientation[2]))
+
+            # # Visual frame transform
+            # m2 = nv.translate(nv.mat4(1), nv.vec3(local_visual_frame_position[0], local_visual_frame_position[1], local_visual_frame_position[2]))
+            # m2 = m2 * nv.mat4_cast(nv.quat(local_visual_frame_orientation[3], local_visual_frame_orientation[0], local_visual_frame_orientation[1], local_visual_frame_orientation[2]))
+
+            # nv_objects[object_name].get_transform().set_transform(m1 * m2)
+
+            m1 = np.eye(4)
+            m1[:3, 3] = world_link_frame_position
+            m1[:3, :3] = pyrr.matrix44.create_from_quaternion(world_link_frame_orientation)[:3, :3]
+
+            # Visual frame transform
+            m2 = np.eye(4)
+
+            m2[:3, 3] = local_visual_frame_position
+            m2[:3, :3] = pyrr.matrix44.create_from_quaternion(local_visual_frame_orientation)[:3, :3]
+            m = m1 @ m2
+
+            bpy.ops.object.select_all(action='DESELECT')
+            nv_objects[object_name].select_set(True)
+
+            nv_objects[object_name].location.x = m[0][-1]
+            nv_objects[object_name].location.y = m[1][-1]
+            nv_objects[object_name].location.z = m[2][-1]
+
+            # print(trans)
+
+            matrix = pyrr.Matrix44(m).matrix33
+            # print(matrix)
+            # matrix = matrix * pyrr.Matrix33.from_x_rotation(-np.pi/2)
+            nv_objects[object_name].rotation_mode = 'QUATERNION'
+            nv_objects[object_name].rotation_quaternion.x = matrix.quaternion.x
+            nv_objects[object_name].rotation_quaternion.y = matrix.quaternion.y
+            nv_objects[object_name].rotation_quaternion.z = matrix.quaternion.z
+            nv_objects[object_name].rotation_quaternion.w = matrix.quaternion.w
+
+            if i_frame > 0:     
+                nv_objects[object_name].keyframe_insert(
+                    data_path='location', 
+                    frame=i_frame
+                )
+                nv_objects[object_name].keyframe_insert(
+                    data_path='rotation_quaternion', 
+                    frame=i_frame
+                )
+                print('frame')
+    return nv_objects
 
 
 s = config_file.seed
@@ -242,317 +444,111 @@ random.seed(s)
 np.random.seed(s)
 
 NB_FRAMES = config_file.render.nb_frames
-
-cfg_start = {}
-data_structure = {}
-
-children_structure = {}
-parent_structure = {}
-
-link_top2joint = {}
-
-for joint_name in kitchen.joint_names:
-    j = kitchen.joint_map[joint_name]
-    if not j.type == 'fixed':
-        pass
-        # print(joint_name,j.type,j.origin)
-        # print(joint_name,j.type)
-    else:
-        print(joint_name,j.type)
-
-    data_structure[joint_name] = {
-        'parent':j.parent,
-        'child':j.child
-    }
-    link_top2joint[j.parent] = joint_name
-
-    if j.parent in children_structure:
-        children_structure[j.parent].append(j.child)
-    else:
-        children_structure[j.parent]=[j.child]
-    parent_structure[j.child]=j.parent
-    # if 'range' in j.child:
-        # print(j.child,'is child to',j.parent)
-    if not j.limit is None: 
-        # print(j.limit)
-        cfg_start[joint_name] = random.uniform(j.limit.lower,j.limit.upper)
-
-
-
-# raise()
-# print(data_structure)
-
-#make the interpret
-values_to_render = {}
-
-for joint_name in cfg_start.keys():
-    # print(joint_name)
-    j = kitchen.joint_map[joint_name]
-    # print(j.origin)
-    nb_poses = config_file.content.nb_poses
-    x = np.linspace(0,1,nb_poses)
-    y = [random.uniform(j.limit.lower,j.limit.upper) for i in range(nb_poses)]
-    for iv in range(len(y)):
-        if random.uniform(0,1)>0.6 :
-            y[iv] = j.limit.lower
-    inter = scipy.interpolate.interp1d(x,y,
-        # kind= random.choice(['linear', 'quadratic', 'cubic']),
-        kind= random.choice(['linear']),
-    )
-    # else:
-    # inter = scipy.interpolate.splrep(x,y,
-    #     # kind= random.choice(['linear', 'quadratic', 'cubic']),
-    #     )
-
-
-    x_values = np.linspace(0,1,NB_FRAMES)
-    
-    values = inter(x_values)
-    values[values < j.limit.lower] = j.limit.lower
-    values[values > j.limit.upper] = j.limit.upper
-
-    values_to_render[joint_name] = values
-# raise()
-bpy.context.scene.frame_end=NB_FRAMES
-
-kitchen.update_cfg(cfg_start)
-
-# load in blender. 
-link2blender = {}
-DATA_2_EXPORT = {}
-
-bpy.ops.object.select_all(action='DESELECT')
-
 root_obj = None
-
-
-        # if root_obj is None:
-        #     root_obj = ob
 all_textures = glob.glob(config_file.content.materials_path+"*/")
-origin_trans = {}
-
-for link in kitchen.link_map.keys():    
-    link_name = link
-    link = kitchen.link_map[link]
-    # print(link_name,link.parent,link.child)
 
 
-    if len(link.visuals) == 0: 
-        bpy.ops.object.empty_add(radius=0.05,location=(0,0,0))
-        obj = bpy.context.object
-        obj.name = link_name
-        link2blender[link_name] = obj
-        add_annotation(obj,empty=True,link_name=link_name, data_parent=parent_structure)
+# p.connect(p.GUI)
+p.connect(p.DIRECT)
 
-    for visual in link.visuals:
-        # print(visual.geometry.mesh)
-        if visual.geometry.mesh is None: 
-            continue
+p.setAdditionalSearchPath(pybullet_data.getDataPath())
+p.setAdditionalSearchPath(config_file.content.urdf_content_path)
+robot = p.loadURDF(config_file.content.urdf_path, [0, 0, 0], useFixedBase=True)
 
-        path = visual.geometry.mesh.filename.replace("package://","")
-        path = path.replace("reachy_description/","")
-        path = path.replace("baxter_description/","")
-        if 'allegro' in path:
-            path = path + "/meshes/"
+num_joints = p.getNumJoints(robot)
 
-        file_type = visual.geometry.mesh.filename.split('.')[-1]
+# Store child link indices
+child_links = set()
 
-        bpy.ops.object.select_all(action='DESELECT')
+# Iterate over each joint and store child link indices
+for joint_index in range(num_joints):
+    joint_info = p.getJointInfo(robot, joint_index)
+    child_link_index = joint_info[16]
+    if child_link_index != -1:
+        child_links.add(child_link_index)
 
-        if not visual.geometry.mesh is None:
-
-            data_2_load = os.path.join(f'{urdf_content_path}/',path)
-            print(data_2_load)
-            # bpy.ops.import_scene.obj(filepath=data_2_load)
-            if file_type.lower() == 'obj':
-                bpy.ops.wm.obj_import(filepath=data_2_load)
-            elif file_type.lower() == 'dae':
-                bpy.ops.wm.collada_import(filepath=data_2_load)
-            elif file_type.lower() == 'stl':
-                bpy.ops.wm.stl_import(filepath=data_2_load)
-
-            delete_all_lights()
-            delete_all_cameras()
-
-            print(visual.origin)
-
-
-            selected_objects = bpy.context.selected_objects
-
-            # Deselect all objects
-            bpy.ops.object.select_all(action='DESELECT')
-
-            # Select mesh objects among the selected objects
-            for obj in selected_objects:
-                if obj.type == 'MESH':
-                    print(obj.name)
-                    obj.select_set(True)
-            # Join selected mesh objects
-            bpy.ops.object.join()
-
-            bpy.ops.object.shade_smooth(use_auto_smooth=True)
-                    
-            obj = bpy.context.selected_objects[0]
-            obj.name = link_name
-            bpy.context.view_layer.objects.active = obj
+# Find the root link
+root_link_index = None
+for link_index in range(num_joints + 1):  # Including the base link
+    if link_index not in child_links:
+        root_link_index = link_index
+        break
 
 
 
-            # bpy.ops.object.select_all(action='DESELECT')
+num_joints = p.getNumJoints(robot)
+numJoints = p.getNumJoints(robot)
 
-            # for ob in selected_objects:
-            #     try:
-            #         if (ob.name in bpy.data.objects) and not ob.type == 'MESH':
-            #             ob.select_set(True)
-            #     except: 
-            #         pass
+# Generate random joint poses
+random_joint_poses = np.random.rand(num_joints) * 2.0 - 1.0  # Random values between -1 and 1
 
-            # bpy.ops.object.delete()
-
-
-            # bpy.ops.wm.save_as_mainfile(filepath=f"/Users/jtremblay/code/blender_robot_animation/urdf.blend")
-
-
-
-            # bpy.ops.object.select_all(action='DESELECT')
-
-            # bpy.ops.object.mode_set(mode='EDIT')
-            # # # Select the geometry
-            # bpy.ops.mesh.select_all(action='SELECT')
-            # # # Call the smart project operator
-            # bpy.ops.uv.smart_project()
-            # # # Toggle out of Edit Mode
-            # bpy.ops.object.mode_set(mode='OBJECT')
-
-            # bpy.ops.object.shade_smooth(use_auto_smooth=True)
-            
-            path = all_textures[np.random.randint(0,len(all_textures)-1)]
-            print(path)
-            add_material(obj,path)
-
-
-            link2blender[link_name] = obj
-
-            # raise()
-        elif not visual.geometry.box is None:
-            s = visual.geometry.box.size
-            s = (s[0]/2,s[1]/2,s[2]/2)
-            bpy.ops.mesh.primitive_cube_add()
-            obj = bpy.context.active_object
-            obj.scale = s
-            bpy.ops.object.transform_apply(scale=True)
-            obj.name = link_name
-            link2blender[link_name] = obj
-
-        elif not visual.geometry.cylinder is None:
-            cyl = visual.geometry.cylinder
-            bpy.ops.mesh.primitive_cylinder_add(radius=cyl.radius,depth=cyl.length)
-            obj = bpy.context.active_object
-            obj.name = link_name
-            link2blender[link_name] = obj
-        else:
-            print(visual.geometry, 'not supported')
-
-        if not visual.origin is None:
-            # reset transformation
-            # bpy.ops.object.select_all(action='DESELECT')
-            # obj.select_set(True)
-            # bpy.context.view_layer.objects.active = obj
-            origin_trans[link_name] = visual.origin
-
-        #### ADD ANNOTATION ####
-        add_annotation(obj,link_name= link_name,data_parent=parent_structure)
-
-        DATA_2_EXPORT[obj.name] = {}
-
-    # if not link.inertial is None and not link.inertial.origin is None:  
-    #     origin_trans[link_name] = link.inertial.origin
-
-
-    if link_name not in parent_structure.keys():
-        root_obj = obj
-        bpy.ops.wm.save_as_mainfile(filepath=f"/Users/jtremblay/code/blender_robot_animation/urdf.blend")
-
-        # break
-
-bpy.context.view_layer.update()
-
-
-
-###### UPDATE THE KITCHEN to 0,0,0
-cfg = {}
-for link in values_to_render.keys():
-    cfg[link] = values_to_render[link][0]
-
-kitchen.update_cfg(cfg)
-
-for link in link2blender.keys():
-
-    trans = kitchen.get_transform(link)
-    # print(trans)
-    obj = link2blender[link]
+# Set the joint poses
+for joint_index in range(num_joints):
+    joint_info = p.getJointInfo(robot, joint_index)
+    joint_type = joint_info[2]
     
-    obj.location.x = trans[0][-1]
-    obj.location.y = trans[1][-1]
-    obj.location.z = trans[2][-1]
+    if joint_type == p.JOINT_REVOLUTE or joint_type == p.JOINT_PRISMATIC:
+        # Set the joint pose
+        p.resetJointState(robot, joint_index, random_joint_poses[joint_index])
 
-    # print(trans)
 
-    matrix = pyrr.Matrix44(trans).matrix33
-    # print(matrix)
-    # matrix = matrix * pyrr.Matrix33.from_x_rotation(-np.pi/2)
-    obj.rotation_mode = 'QUATERNION'
-    obj.rotation_quaternion.x = matrix.quaternion.x
-    obj.rotation_quaternion.y = matrix.quaternion.y
-    obj.rotation_quaternion.z = matrix.quaternion.z
-    obj.rotation_quaternion.w = matrix.quaternion.w
 
-bpy.context.view_layer.update()
+# Keep track of the cube objects
+nv_objects = update_visual_objects([robot], "")
+nv_objects = update_visual_objects([robot], ".", nv_objects)
 
+# for nv_obj in nv_objects.keys(): 
+#     print(nv_obj,nv_obj.split("_")[1])
+#     print(root_link_index == nv_obj.split("_")[1])
 # raise()
 
-k0 = list(values_to_render.keys())[0]
-for i in range(len(values_to_render[k0])):
-    cfg = {}
-    for link in values_to_render.keys():
-        cfg[link] = values_to_render[link][i]
+jointPoses = None
+previous_pose = None
+old_velocity = None
+current_vel_joints = None
 
-    kitchen.update_cfg(cfg)
+for i_frame in range(NB_FRAMES):
+    joint_now = []
 
-    for link in link2blender.keys():
-        trans = kitchen.get_transform(link)
+    for i in range(numJoints):
+        # print(p.getJointStates(robot,i))
+        joint_now.append(p.getJointState(robot,i)[0])
 
-        if link in link_top2joint.keys():
-            joint=link_top2joint[link]
-            joint_origin = kitchen.joint_map[joint].origin
+    if jointPoses:
+        # print(np.linalg.norm(np.array(jointPoses)-np.array(joint_now)))
+        old_velocity = current_vel_joints
+        current_vel_joints = np.linalg.norm(np.array(jointPoses)-np.array(joint_now))
 
-            if link in origin_trans:
-                trans = np.dot(trans,np.dot(joint_origin,origin_trans[link]))
-            else:
-                trans = np.dot(trans,joint_origin)
+    if old_velocity is None or \
+        np.abs(old_velocity-current_vel_joints) < 0.05:
+        jointPoses = []
+        for i_joint in range(numJoints):
+            # jointPoses.append(np.random.uniform(low=limits[i_joint][0],high=limits[i_joint][1]))
+            jointPoses.append(np.random.uniform(low=0,high=2*np.pi))
+    
+    for steps in range(config_file.nb_bullet_steps):
+        for i_joint in range(numJoints):
+            p.setJointMotorControl2(bodyIndex=robot,
+                                    jointIndex=i_joint,
+                                    controlMode=p.POSITION_CONTROL,
+                                    targetPosition=jointPoses[i_joint],
+                                    targetVelocity=0,
+                                    force=.1,
+                                    positionGain=0.03,
+                                    velocityGain=0.1)
+        p.stepSimulation()
 
-        elif link in origin_trans:
-            trans = np.dot(trans,origin_trans[link])
 
-        obj = link2blender[link]
-        
-        obj.location.x = trans[0][-1]
-        obj.location.y = trans[1][-1]
-        obj.location.z = trans[2][-1]
 
-        # print(trans)
+    nv_objects = update_visual_objects([robot], ".", nv_objects, i_frame = i_frame)
+    
 
-        matrix = pyrr.Matrix44(trans).matrix33
-        # print(matrix)
-        # matrix = matrix * pyrr.Matrix33.from_x_rotation(-np.pi/2)
-        obj.rotation_mode = 'QUATERNION'
-        obj.rotation_quaternion.x = matrix.quaternion.x
-        obj.rotation_quaternion.y = matrix.quaternion.y
-        obj.rotation_quaternion.z = matrix.quaternion.z
-        obj.rotation_quaternion.w = matrix.quaternion.w
 
-        obj.keyframe_insert(data_path='location', frame=i)
-        obj.keyframe_insert(data_path='rotation_quaternion', frame=i)
+
+
+
+bpy.ops.wm.save_as_mainfile(filepath=f"{config_file.output_path}/urdf.blend")
+
 
 
 #####################
@@ -620,7 +616,7 @@ camera_object.name = 'Camera'  # Rename the camera object to 'Camera'
 bpy.context.scene.camera = camera_object  # Set the scene's active camera to the newly added camera
 
 track_to_constraint = camera_object.constraints.new(type='TRACK_TO')
-track_to_constraint.target = root_obj
+track_to_constraint.target = nv_objects[list(nv_objects.keys())[0]]
 
 # get 4 positions 
 nb_anchors = config_file.render.camera.nb_anchors

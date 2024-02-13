@@ -23,7 +23,8 @@ config_file = OmegaConf.load(opt.config)
 if not os.path.exists(config_file.output_path):
     os.makedirs(config_file.output_path)
 
-render_cmd = f'PYTHONPATH=/Users/jtremblay/miniconda3/bin/python {config_file.blender_path} -b --python-use-system-env -P blender_scripts/urdf_rendering.py -- --config {opt.config}' 
+# render_cmd = f'PYTHONPATH=/Users/jtremblay/miniconda3/bin/python {config_file.blender_path} -b --python-use-system-env -P blender_scripts/urdf_rendering.py -- --config {opt.config}' 
+render_cmd = f'PYTHONPATH=/Users/jtremblay/miniconda3/bin/python {config_file.blender_path} -b --python-use-system-env -P blender_scripts/urdf_rendering_pybullet.py -- --config {opt.config}' 
 
 
 # render_cmd = render_cmd + ' > tmp.out'

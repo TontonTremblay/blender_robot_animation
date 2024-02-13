@@ -1,13 +1,13 @@
 blender_path: "/Applications/Blender.app/Contents/MacOS/Blender"
-seed: 1912
+seed: 11112
 render:
   nb_frames: 200 
   resolution: 1024
   camera:
-    elevation: [45,90]
+    elevation: [45,135]
     theta: 360
     nb_anchors: 10
-    distance_center: 1
+    distance_center: 4
 content:
   nb_poses: 4
   urdf_content_path: "/Users/jtremblay/code/blender_robot_animation/models/baxter_common/baxter_description/"
@@ -16,3 +16,4 @@ content:
   materials_path: "/Users/jtremblay/code/holodeck_blender/assets/textures/"
   random_material: True
 output_path: "/Users/jtremblay/code/blender_robot_animation/renders/baxter/"
+nb_bullet_steps: 6
