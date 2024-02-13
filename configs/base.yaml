@@ -13,4 +13,4 @@ content:
   urdf_path: "urdf/jaco_clean.urdf"
   hdri_env_map: "/Users/jtremblay/code/blender_robot_animation/models/hdris/"
   materials_path: "/Users/jtremblay/code/holodeck_blender/assets/textures/"
-output_path: "/Users/jtremblay/code/blender_robot_animation/renders/1/"
+output_path: "/Users/jtremblay/code/blender_robot_animation/renders/jaco/"

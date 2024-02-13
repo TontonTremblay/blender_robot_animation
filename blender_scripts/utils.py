@@ -26,6 +26,7 @@ depth_file_output = None
 flow_file_output = None 
 
 
+
 def EmissionColorObj(obj, color):
     new_mat = bpy.data.materials.new(name="seg")
     new_mat.use_nodes = True

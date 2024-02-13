@@ -4,3 +4,6 @@
 [submodule "models/reachy_description"]
 	path = models/reachy_description
 	url = git@github.com:aubrune/reachy_description.git
+[submodule "models/baxter_common"]
+	path = models/baxter_common
+	url = git@github.com:RethinkRobotics/baxter_common.git

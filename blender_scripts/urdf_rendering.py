@@ -249,17 +249,22 @@ data_structure = {}
 children_structure = {}
 parent_structure = {}
 
- 
+link_top2joint = {}
 
 for joint_name in kitchen.joint_names:
     j = kitchen.joint_map[joint_name]
     if not j.type == 'fixed':
-        print(joint_name,j.type,j.origin)
+        pass
+        # print(joint_name,j.type,j.origin)
+        # print(joint_name,j.type)
+    else:
+        print(joint_name,j.type)
 
     data_structure[joint_name] = {
         'parent':j.parent,
         'child':j.child
     }
+    link_top2joint[j.child] = joint_name
 
     if j.parent in children_structure:
         children_structure[j.parent].append(j.child)
@@ -274,12 +279,6 @@ for joint_name in kitchen.joint_names:
 
 
 
-
-
-# print(parent_structure)
-
-
-
 # raise()
 # print(data_structure)
 
@@ -287,9 +286,10 @@ for joint_name in kitchen.joint_names:
 values_to_render = {}
 
 for joint_name in cfg_start.keys():
-
+    # print(joint_name)
     j = kitchen.joint_map[joint_name]
-    nb_poses = 2
+    # print(j.origin)
+    nb_poses = config_file.content.nb_poses
     x = np.linspace(0,1,nb_poses)
     y = [random.uniform(j.limit.lower,j.limit.upper) for i in range(nb_poses)]
     for iv in range(len(y)):
@@ -312,7 +312,7 @@ for joint_name in cfg_start.keys():
     values[values > j.limit.upper] = j.limit.upper
 
     values_to_render[joint_name] = values
-
+# raise()
 bpy.context.scene.frame_end=NB_FRAMES
 
 kitchen.update_cfg(cfg_start)
@@ -325,39 +325,53 @@ bpy.ops.object.select_all(action='DESELECT')
 
 root_obj = None
 
+
+        # if root_obj is None:
+        #     root_obj = ob
+all_textures = glob.glob(config_file.content.materials_path+"*/")
+origin_trans = {}
+
 for link in kitchen.link_map.keys():    
     link_name = link
     link = kitchen.link_map[link]
     # print(link_name,link.parent,link.child)
+
+
     if len(link.visuals) == 0: 
         bpy.ops.object.empty_add(radius=0.05,location=(0,0,0))
-        ob = bpy.context.object
-        ob.name = link_name
-        link2blender[link_name] = ob
-        add_annotation(ob,empty=True,link_name=link_name,data_parent=parent_structure)
-        if root_obj is None:
-            root_obj = ob
+        obj = bpy.context.object
+        obj.name = link_name
+        link2blender[link_name] = obj
+        add_annotation(obj,empty=True,link_name=link_name, data_parent=parent_structure)
 
     for visual in link.visuals:
 
         path = visual.geometry.mesh.filename.replace("package://","")
         path = path.replace("reachy_description/","")
+        path = path.replace("baxter_description/","")
+        if 'allegro' in path:
+            path = path + "/meshes/"
+
         file_type = visual.geometry.mesh.filename.split('.')[-1]
 
         bpy.ops.object.select_all(action='DESELECT')
 
         if not visual.geometry.mesh is None:
-            data_2_load = os.path.join(f'{urdf_content_path}/meshes/',path)
+
+            data_2_load = os.path.join(f'{urdf_content_path}/',path)
             print(data_2_load)
             # bpy.ops.import_scene.obj(filepath=data_2_load)
-            if file_type == 'obj':
+            if file_type.lower() == 'obj':
                 bpy.ops.wm.obj_import(filepath=data_2_load)
-            elif file_type == 'dae':
+            elif file_type.lower() == 'dae':
                 bpy.ops.wm.collada_import(filepath=data_2_load)
+            elif file_type.lower() == 'stl':
+                bpy.ops.wm.stl_import(filepath=data_2_load)
+
             delete_all_lights()
             delete_all_cameras()
 
-
+            print(visual.origin)
 
 
             selected_objects = bpy.context.selected_objects
@@ -370,39 +384,33 @@ for link in kitchen.link_map.keys():
                 if obj.type == 'MESH':
                     print(obj.name)
                     obj.select_set(True)
-            # bpy.ops.wm.save_as_mainfile(filepath=f"/Users/jtremblay/code/blender_robot_animation/urdf.blend")
-
             # Join selected mesh objects
             bpy.ops.object.join()
 
-
+            bpy.ops.object.shade_smooth(use_auto_smooth=True)
                     
             obj = bpy.context.selected_objects[0]
             obj.name = link_name
             bpy.context.view_layer.objects.active = obj
 
 
-            bpy.ops.object.select_all(action='DESELECT')
 
-            for ob in selected_objects:
-                try:
-                    if (ob.name in bpy.data.objects) and not ob.type == 'MESH':
-                        ob.select_set(True)
-                except: 
-                    pass
+            # bpy.ops.object.select_all(action='DESELECT')
 
-            bpy.ops.object.delete()
+            # for ob in selected_objects:
+            #     try:
+            #         if (ob.name in bpy.data.objects) and not ob.type == 'MESH':
+            #             ob.select_set(True)
+            #     except: 
+            #         pass
+
+            # bpy.ops.object.delete()
 
 
             # bpy.ops.wm.save_as_mainfile(filepath=f"/Users/jtremblay/code/blender_robot_animation/urdf.blend")
 
-            # raise()
 
 
-
-
-
-            # raise()
             # bpy.ops.object.select_all(action='DESELECT')
 
             # bpy.ops.object.mode_set(mode='EDIT')
@@ -413,8 +421,11 @@ for link in kitchen.link_map.keys():
             # # # Toggle out of Edit Mode
             # bpy.ops.object.mode_set(mode='OBJECT')
 
-            # bpy.ops.object.shade_smooth()
-            # add_material(obj,'/Users/jtremblay/code/holodeck_blender/assets/textures/Plastic009/')
+            # bpy.ops.object.shade_smooth(use_auto_smooth=True)
+            
+            path = all_textures[np.random.randint(0,len(all_textures)-1)]
+            print(path)
+            add_material(obj,path)
 
 
             link2blender[link_name] = obj
@@ -429,6 +440,7 @@ for link in kitchen.link_map.keys():
             bpy.ops.object.transform_apply(scale=True)
             obj.name = link_name
             link2blender[link_name] = obj
+
         elif not visual.geometry.cylinder is None:
             cyl = visual.geometry.cylinder
             bpy.ops.mesh.primitive_cylinder_add(radius=cyl.radius,depth=cyl.length)
@@ -438,11 +450,27 @@ for link in kitchen.link_map.keys():
         else:
             print(visual.geometry, 'not supported')
 
+        if not visual.origin is None:
+            # reset transformation
+            # bpy.ops.object.select_all(action='DESELECT')
+            # obj.select_set(True)
+            # bpy.context.view_layer.objects.active = obj
+            origin_trans[link_name] = visual.origin
 
         #### ADD ANNOTATION ####
         add_annotation(obj,link_name= link_name,data_parent=parent_structure)
 
         DATA_2_EXPORT[obj.name] = {}
+
+    # if not link.inertial is None and not link.inertial.origin is None:  
+    #     origin_trans[link_name] = link.inertial.origin
+
+
+    if link_name not in parent_structure.keys():
+        root_obj = obj
+        bpy.ops.wm.save_as_mainfile(filepath=f"/Users/jtremblay/code/blender_robot_animation/urdf.blend")
+
+        # break
 
 bpy.context.view_layer.update()
 
@@ -456,7 +484,9 @@ for link in values_to_render.keys():
 kitchen.update_cfg(cfg)
 
 for link in link2blender.keys():
+
     trans = kitchen.get_transform(link)
+    # print(trans)
     obj = link2blender[link]
     
     obj.location.x = trans[0][-1]
@@ -476,8 +506,7 @@ for link in link2blender.keys():
 
 bpy.context.view_layer.update()
 
-
-
+# raise()
 
 k0 = list(values_to_render.keys())[0]
 for i in range(len(values_to_render[k0])):
@@ -489,6 +518,19 @@ for i in range(len(values_to_render[k0])):
 
     for link in link2blender.keys():
         trans = kitchen.get_transform(link)
+
+        if link in link_top2joint.keys():
+            joint=link_top2joint[link]
+            joint_origin = kitchen.joint_map[joint].origin
+
+            if link in origin_trans:
+                trans = np.dot(trans,np.dot(joint_origin,origin_trans[link]))
+            else:
+                trans = np.dot(trans,joint_origin)
+
+        elif link in origin_trans:
+            trans = np.dot(trans,origin_trans[link])
+
         obj = link2blender[link]
         
         obj.location.x = trans[0][-1]
@@ -509,6 +551,42 @@ for i in range(len(values_to_render[k0])):
         obj.keyframe_insert(data_path='location', frame=i)
         obj.keyframe_insert(data_path='rotation_quaternion', frame=i)
 
+
+#####################
+#####################
+#####################
+#####################
+#####################
+
+
+# # Parameters
+# grid_size = 20  # Size of the grid (5x5 in this case)
+# cube_spacing = 10  # Spacing between cubes
+# max_random_height = 1.5  # Maximum random height factor
+# power_factor = 1.1  # Power factor for the height calculation
+# nb_random_textures = 10 
+# textures = []
+# import glob 
+# all_textures = glob.glob(config_file.content.materials_path+"*/")
+# for i in range(nb_random_textures):
+#     textures.append(all_textures[np.random.randint(0,len(all_textures)-1)])
+
+
+# # Create cubes
+# for x in range(-grid_size // 2, grid_size // 2 + 1):
+#     for y in range(-grid_size // 2, grid_size // 2 + 1):
+#         # Calculate height based on distance from center
+#         distance = max(abs(x), abs(y))
+#         height_factor = 1.0 + (max_random_height * random.random() * math.pow(distance, power_factor))
+
+#         bpy.ops.mesh.primitive_cube_add(size=2, location=(x * cube_spacing, y * cube_spacing, 0))
+#         cube = bpy.context.object
+#         # Apply height factor to the cube
+#         cube.scale.x = cube_spacing/2
+#         cube.scale.y = cube_spacing/2
+#         cube.scale.z *= height_factor
+#         cube.location.z = -2.0
+#         add_material(cube,textures[np.random.randint(0,len(textures)-1)])
 
 #####################
 #####################
@@ -573,8 +651,7 @@ for i in range(nb_anchors):
     camera_object.location.y = an[0][1]*config_file.render.camera.distance_center
     camera_object.location.z = an[0][2]*config_file.render.camera.distance_center 
     # camera_object.location.z = an[0][2]*4 + 0.5 * neg
-    if i % 2 == 0: 
-        neg*=-1
+
 
 
 
@@ -673,7 +750,7 @@ make_segmentation_scene()
 # links.new(render_layers.outputs['Image'], node_viewer.inputs[0])
 
 
-# bpy.context.window.scene = bpy.data.scenes['Scene']
+bpy.context.window.scene = bpy.data.scenes['Scene']
 
 ########################
 ########################
@@ -681,6 +758,14 @@ make_segmentation_scene()
 ########################
 ########################
 ########################
+
+
+
+bpy.context.scene.render.filepath = config_file.output_path
+bpy.ops.wm.save_as_mainfile(filepath=f"{config_file.output_path}/urdf.blend")
+
+
+raise()
 
 
 for i in range(NB_FRAMES):
@@ -703,7 +788,5 @@ for i in range(NB_FRAMES):
 ########################
 
 
-bpy.context.scene.render.filepath = config_file.output_path
-bpy.ops.wm.save_as_mainfile(filepath=f"{config_file.output_path}/urdf.blend")
 
 
