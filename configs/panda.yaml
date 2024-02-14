@@ -16,3 +16,4 @@ content:
   materials_path: "/Users/jtremblay/code/holodeck_blender/assets/textures/"
   random_material: True
 output_path: "/Users/jtremblay/code/blender_robot_animation/renders/panda/"
+nb_bullet_steps: 10

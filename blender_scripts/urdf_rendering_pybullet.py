@@ -30,6 +30,9 @@ import pybullet
 import pybullet as p
 import pybullet_data
 
+from icecream import ic 
+print = ic 
+
 parser = argparse.ArgumentParser(description='Renders given obj file by rotation a camera around it.')
 parser.add_argument(
     '--config', default=None,
@@ -39,6 +42,8 @@ argv = sys.argv[sys.argv.index("--") + 1:]
 opt = parser.parse_args(argv)
 
 config_file = OmegaConf.load(opt.config)
+base = OmegaConf.load(config_file.base)
+config_file.base = base
 
 
 
@@ -225,6 +230,7 @@ bpy.context.scene.cycles.transmission_bounces = 3
 bpy.context.scene.cycles.samples = 32
 bpy.context.scene.cycles.use_denoising = True
 
+bpy.context.scene.frame_end = config_file.render.nb_frames
 
 ##### LOAD THE URDF SCENE #####
 # urdf_content_path = "/Users/jtremblay/code/yourdfpy/robot/kitchen_urdf/"
@@ -269,12 +275,22 @@ def update_visual_objects(object_ids, pkg_path, nv_objects=None,i_frame=-1):
                 # m2 = m2 * nv.mat4_cast(nv.quat(world_link_frame_orientation[3], world_link_frame_orientation[0], world_link_frame_orientation[1], world_link_frame_orientation[2]))
                 # m = nv.inverse(m1) * m2
                 # q = nv.quat_cast(m)
+
+                link_state = p.getLinkState(object_id,link_index)
+
+                # print(link_state[0])
+                # print(link_state[2])
+                # print(link_state[4])
+
+                # raise()
+
                 dynamics_info = p.getDynamicsInfo(object_id, -1)
                 inertial_frame_position = dynamics_info[3]
                 inertial_frame_orientation = dynamics_info[4]
                 base_state = p.getBasePositionAndOrientation(objectUniqueId)
                 world_link_frame_position = base_state[0]
                 world_link_frame_orientation = base_state[1]
+
 
                 m1 = np.eye(4)
                 m1[:3, 3] = inertial_frame_position
@@ -284,7 +300,13 @@ def update_visual_objects(object_ids, pkg_path, nv_objects=None,i_frame=-1):
                 m2[:3, 3] = world_link_frame_position
                 m2[:3, :3] = pyrr.matrix44.create_from_quaternion(world_link_frame_orientation)[:3, :3]
 
-                m = np.linalg.inv(m1) @ m2
+                m3 = np.eye(4)
+                m3[:3, 3] = link_state[4]
+                m3[:3, :3] = pyrr.matrix44.create_from_quaternion(link_state[5])[:3, :3]
+
+
+
+                m = np.linalg.inv(m1) @ m2 
                 # q = pyrr.quaternion.matrix_to_quaternion(m)                
                 q = pyrr.quaternion.create_from_matrix(m)
                 world_link_frame_position = m[:3,3]
@@ -435,7 +457,7 @@ def update_visual_objects(object_ids, pkg_path, nv_objects=None,i_frame=-1):
                     data_path='rotation_quaternion', 
                     frame=i_frame
                 )
-                print('frame')
+                # print('frame')
     return nv_objects
 
 
@@ -491,56 +513,97 @@ for joint_index in range(num_joints):
         # Set the joint pose
         p.resetJointState(robot, joint_index, random_joint_poses[joint_index])
 
+limits = []
+for joint_index in range(num_joints):
+    joint_info = p.getJointInfo(robot, joint_index)
+    joint_name = joint_info[1].decode("utf-8")  # Decode the joint name
+    joint_type = joint_info[2]  # Joint type (p.JOINT_REVOLUTE, p.JOINT_PRISMATIC, etc.)
+    joint_lower_limit = joint_info[8]  # Lower limit of the joint
+    joint_upper_limit = joint_info[9]  # Upper limit of the joint
+    limits.append([joint_lower_limit,joint_upper_limit])
+
 
 
 # Keep track of the cube objects
 nv_objects = update_visual_objects([robot], "")
 nv_objects = update_visual_objects([robot], ".", nv_objects)
 
-# for nv_obj in nv_objects.keys(): 
-#     print(nv_obj,nv_obj.split("_")[1])
-#     print(root_link_index == nv_obj.split("_")[1])
-# raise()
 
-jointPoses = None
-previous_pose = None
-old_velocity = None
-current_vel_joints = None
 
-for i_frame in range(NB_FRAMES):
-    joint_now = []
+# Initialize target positions with current positions
+joint_targets = [p.getJointState(robot, i)[0] for i in range(num_joints)]
+nb_frames = config_file.render.nb_frames
+step_per_frame = config_file.nb_bullet_steps
 
-    for i in range(numJoints):
-        # print(p.getJointStates(robot,i))
-        joint_now.append(p.getJointState(robot,i)[0])
-
-    if jointPoses:
-        # print(np.linalg.norm(np.array(jointPoses)-np.array(joint_now)))
-        old_velocity = current_vel_joints
-        current_vel_joints = np.linalg.norm(np.array(jointPoses)-np.array(joint_now))
-
-    if old_velocity is None or \
-        np.abs(old_velocity-current_vel_joints) < 0.05:
-        jointPoses = []
-        for i_joint in range(numJoints):
-            # jointPoses.append(np.random.uniform(low=limits[i_joint][0],high=limits[i_joint][1]))
-            jointPoses.append(np.random.uniform(low=0,high=2*np.pi))
+for i_frame in range(nb_frames):
+    # Randomly decide new targets for some joints
+    for i in range(num_joints):
+        if np.random.rand() < config_file.prob_change_pose:  # 10% chance to update target for each joint
+            joint_targets[i] = np.random.uniform(limits[i][0], limits[i][1])
     
-    for steps in range(config_file.nb_bullet_steps):
-        for i_joint in range(numJoints):
-            p.setJointMotorControl2(bodyIndex=robot,
-                                    jointIndex=i_joint,
-                                    controlMode=p.POSITION_CONTROL,
-                                    targetPosition=jointPoses[i_joint],
-                                    targetVelocity=0,
-                                    force=.1,
-                                    positionGain=0.03,
-                                    velocityGain=0.1)
+    # Move towards the new targets smoothly
+    for _ in range(step_per_frame):
+        for i in range(num_joints):
+            current_position = p.getJointState(robot, i)[0]
+            # Calculate a step towards the target position
+            step_size = (joint_targets[i] - current_position) * config_file.step_size  # Adjust step size for smoother movement
+            new_position = current_position + step_size
+            # Apply the new position within limits
+            p.setJointMotorControl2(robot, i, p.POSITION_CONTROL, targetPosition=new_position)
+        
         p.stepSimulation()
-
-
-
     nv_objects = update_visual_objects([robot], ".", nv_objects, i_frame = i_frame)
+
+
+
+
+# jointPoses = None
+# previous_pose = None
+# old_velocity = None
+# current_vel_joints = None
+# jointPoses = []
+# for i_joint in range(num_joints):
+#     jointPoses.append(np.random.uniform(low=limits[i_joint][0],high=limits[i_joint][1]))
+
+
+# for i_frame in range(NB_FRAMES):
+#     joint_now = []
+
+#     for i in range(numJoints):
+#         # print(p.getJointStates(robot,i))
+#         joint_now.append(p.getJointState(robot,i)[0])
+
+#     if jointPoses:
+#         # print(np.linalg.norm(np.array(jointPoses)-np.array(joint_now)))
+#         old_velocity = current_vel_joints
+#         current_vel_joints = np.linalg.norm(np.array(jointPoses)-np.array(joint_now))
+
+    
+#     for i_joint in range(numJoints):
+#         vel = np.abs(np.array(jointPoses) - np.array(joint_now))
+#         if vel[i_joint] < config_file.velocity_min:
+#             # Smooth transition towards new target position
+#             target_pos = np.random.uniform(low=limits[i_joint][0], high=limits[i_joint][1])
+#             step_size = config_file.velocity_max * 1  # Define velocity_max in your config
+#             direction = np.sign(target_pos - jointPoses[i_joint])
+#             jointPoses[i_joint] += direction * min(step_size, abs(target_pos - jointPoses[i_joint]))
+
+
+#     for i_joint in range(numJoints):
+#         p.setJointMotorControl2(bodyIndex=robot,
+#                                 jointIndex=i_joint,
+#                                 controlMode=p.POSITION_CONTROL,
+#                                 targetPosition=jointPoses[i_joint],
+#                                 targetVelocity=0,
+#                                 force=config_file.force_movement,
+#                                 positionGain=config_file.position_gain,
+#                                 velocityGain=0.1)
+#     for steps in range(config_file.nb_bullet_steps):
+#         p.stepSimulation()
+
+
+
+#     nv_objects = update_visual_objects([robot], ".", nv_objects, i_frame = i_frame)
     
 
 
@@ -616,55 +679,74 @@ camera_object.name = 'Camera'  # Rename the camera object to 'Camera'
 bpy.context.scene.camera = camera_object  # Set the scene's active camera to the newly added camera
 
 track_to_constraint = camera_object.constraints.new(type='TRACK_TO')
-track_to_constraint.target = nv_objects[list(nv_objects.keys())[0]]
 
-# get 4 positions 
-nb_anchors = config_file.render.camera.nb_anchors
-neg = 1
+# Create a new empty object
+bpy.ops.object.empty_add(location=config_file.offset)
+new_empty = bpy.context.active_object
+new_empty.name = 'target'
 
-interval_theta = config_file.render.camera.theta
+track_to_constraint.target = new_empty
 
-for i in range(nb_anchors): 
+radius = 1.0
 
-    an = sample_points_on_sphere(
-                        num_points = 1,
-                        elevation_range = config_file.render.camera.elevation,
-                        # elevation_range = [
-                        #     i*360//(nb_anchors-1),
-                        #     (i+1)*360//(nb_anchors-1)],
-                        theta_range = [i*interval_theta//(nb_anchors-1),(i+1)*interval_theta//(nb_anchors-1)]
-                    )   
+# Define parameters for the line
+theta = np.linspace(0, 6*np.pi, config_file.render.nb_frames)  # Parameter for the line, making a full loop around the sphere
 
-    # an = random_sample_sphere(
-    #                     nb_frames = 1,
-    #                     elevation_range = [90,120],
-    #                     # elevation_range = [
-    #                     #     i*360//(nb_anchors-1),
-    #                     #     (i+1)*360//(nb_anchors-1)],
-    #                     tetha_range = [i*360//(nb_anchors-1),(i+1)*360//(nb_anchors-1)]
-    #                 )   
+# To ensure the line stays on the sphere, adjust phi instead of z directly
+# Add a sinusoidal variation to phi over theta to create interesting patterns on the sphere
+phi = np.pi / 2 + config_file.amplitude_camera * np.sin(4.25 * theta)  # Sinusoidal variation around the equator
+
+# Calculate the coordinates of the line on the sphere using spherical coordinates
+x_line = radius * np.sin(phi) * np.cos(theta)
+y_line = radius * np.sin(phi) * np.sin(theta)
+z_line = radius * np.cos(phi)
 
 
-    print(an)
-    camera_object.location.x = an[0][0]*config_file.render.camera.distance_center
-    camera_object.location.y = an[0][1]*config_file.render.camera.distance_center
-    camera_object.location.z = an[0][2]*config_file.render.camera.distance_center 
-    # camera_object.location.z = an[0][2]*4 + 0.5 * neg
+for i in range(config_file.render.nb_frames):
+    camera_object.location.x = x_line[i]*config_file.render.camera.distance_center + config_file.offset[0]
+    camera_object.location.y = y_line[i]*config_file.render.camera.distance_center + config_file.offset[1]
+    camera_object.location.z = z_line[i]*config_file.render.camera.distance_center + config_file.offset[2] 
+    
+    camera_object.keyframe_insert(data_path='location', frame=i)
+
+
+all_textures = glob.glob(config_file.content.materials_path+"*/")
+
+if config_file.random_materials: 
+    for obj_name in nv_objects:
+        obj = nv_objects[obj_name]
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj 
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        # # Select the geometry
+        bpy.ops.mesh.select_all(action='SELECT')
+        # # Call the smart project operator
+        bpy.ops.uv.smart_project()
+        # # Toggle out of Edit Mode
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        adding_material = True
+        while adding_material:
+            try:
+                path = all_textures[np.random.randint(0,len(all_textures)-1)]
+                print(path)
+                add_material(obj,path)
+                adding_material = False
+            except:
+                pass
 
 
 
-
-    camera_object.keyframe_insert(data_path='location', frame=int((i)*(NB_FRAMES//(nb_anchors-1))))
-
+########################
+########################
+########################
+########################
+########################
+########################
 
 ##### CREATE A new scene for segmentation rendering 
-
-########################
-########################
-########################
-########################
-########################
-########################
 
 make_segmentation_scene()
 
@@ -758,13 +840,26 @@ bpy.context.window.scene = bpy.data.scenes['Scene']
 ########################
 ########################
 
+# Set the scene camera (ensure a camera is selected)
+scene = bpy.context.scene
+if scene.camera is None and bpy.context.selected_objects:
+    # If no active camera, use selected camera
+    for obj in bpy.context.selected_objects:
+        if obj.type == 'CAMERA':
+            scene.camera = obj
+            break
 
+# Change the viewport to look through the active camera
+for area in bpy.context.screen.areas:
+    if area.type == 'VIEW_3D':
+        area.spaces.active.region_3d.view_perspective = 'CAMERA'
+        break
 
 bpy.context.scene.render.filepath = config_file.output_path
 bpy.ops.wm.save_as_mainfile(filepath=f"{config_file.output_path}/urdf.blend")
 
 
-raise()
+# raise()
 
 
 for i in range(NB_FRAMES):
