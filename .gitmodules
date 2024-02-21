@@ -7,3 +7,15 @@
 [submodule "models/baxter_common"]
 	path = models/baxter_common
 	url = git@github.com:RethinkRobotics/baxter_common.git
+[submodule "models/vigir_atlas_common"]
+	path = models/vigir_atlas_common
+	url = git@github.com:team-vigir/vigir_atlas_common.git
+[submodule "models/anymal_c_simple_description"]
+	path = models/anymal_c_simple_description
+	url = git@github.com:ANYbotics/anymal_c_simple_description.git
+[submodule "models/jaxon_description"]
+	path = models/jaxon_description
+	url = git@github.com:robot-descriptions/jaxon_description.git
+[submodule "models/rtmros_nextage"]
+	path = models/rtmros_nextage
+	url = git@github.com:tork-a/rtmros_nextage.git

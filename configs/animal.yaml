@@ -1,0 +1,20 @@
+base: configs/base.yaml
+seed: 1978
+render:
+  nb_frames: 600 
+  resolution: 1024
+  camera:
+    distance_center: 3.1
+content:
+  urdf_content_path: ${base.base_path}/models/anymal_c_simple_description/
+  urdf_path: urdf/anymal.urdf
+  hdri_env_map: ${base.base_path}/models/hdris/
+  materials_path: /Users/jtremblay/code/holodeck_blender/assets/textures/
+output_path: ${base.base_path}/renders/anymal/
+nb_bullet_steps: 10
+random_materials: False
+offset: [0,0,0]
+amplitude_camera: 0.4
+prob_change_pose: 0.1
+step_size: 0.03
+rot_x: 0

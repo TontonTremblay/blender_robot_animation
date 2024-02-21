@@ -1,0 +1,20 @@
+base: configs/base.yaml
+seed: 1953267
+render:
+  nb_frames: 600 
+  resolution: 1024
+  camera:
+    distance_center: 4
+content:
+  urdf_content_path: ${base.base_path}/models/jaxon_description/
+  urdf_path: urdf/jaxon_jvrc.urdf
+  hdri_env_map: ${base.base_path}/models/hdris/
+  materials_path: /Users/jtremblay/code/holodeck_blender/assets/textures/
+output_path: ${base.base_path}/renders/jaxon/
+nb_bullet_steps: 10
+random_materials: False
+offset: [0,0,0]
+amplitude_camera: 0.4
+prob_change_pose: 0.1
+step_size: 0.03
+rot_x: 0

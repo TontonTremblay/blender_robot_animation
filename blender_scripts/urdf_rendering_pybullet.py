@@ -241,6 +241,74 @@ bpy.context.scene.frame_end = config_file.render.nb_frames
 
 # kitchen = URDF.load(f"{urdf_content_path}/{config_file.content.urdf_path}")
 
+def get_world_link_pose(body_unique_id: int, link_index: int):
+    """Pose of link frame with respect to world frame expressed in world frame.
+
+    Args:
+        body_unique_id (int): The body unique id, as returned by loadURDF, etc.
+        link_index (int): Link index or -1 for the base.
+
+    Returns:
+        pos_orn (tuple): See description.
+    """
+    if link_index == -1:
+        world_inertial_pose = get_world_inertial_pose(body_unique_id, -1)
+        dynamics_info = p.getDynamicsInfo(body_unique_id, -1)
+        local_inertial_pose = (dynamics_info[3], dynamics_info[4])
+
+        local_inertial_pose_inv = p.invertTransform(local_inertial_pose[0], local_inertial_pose[1])
+        pos_orn = p.multiplyTransforms(world_inertial_pose[0],
+                                       world_inertial_pose[1],
+                                       local_inertial_pose_inv[0],
+                                       local_inertial_pose_inv[1])
+    else:
+        state = p.getLinkState(body_unique_id, link_index)
+        pos_orn = (state[4], state[5])
+
+    return pos_orn
+
+
+def get_world_inertial_pose(body_unique_id: int, link_index: int):
+    """Pose of inertial frame with respect to world frame expressed in world frame.
+
+    Args:
+        body_unique_id (int): The body unique id, as returned by loadURDF, etc.
+        link_index (int): Link index or -1 for the base.
+
+    Returns:
+        pos_orn (tuple): See description.
+    """
+    if link_index == -1:
+        pos_orn = p.getBasePositionAndOrientation(body_unique_id)
+    else:
+        state = p.getLinkState(body_unique_id, link_index)
+        pos_orn = (state[0], state[1])
+
+    return pos_orn
+
+
+def get_world_visual_pose(body_unique_id: int, link_index: int):
+    """Pose of visual frame with respect to world frame expressed in world frame.
+
+    Args:
+        body_unique_id (int): The body unique id, as returned by loadURDF, etc.
+        link_index (int): Link index or -1 for the base.
+
+    Returns:
+        pos_orn (tuple): See description.
+    """
+    world_link_pose = get_world_link_pose(body_unique_id, link_index)
+    visual_shape_data = p.getVisualShapeData(body_unique_id, link_index)
+    local_visual_pose = (visual_shape_data[link_index + 1][5], visual_shape_data[link_index + 1][6])
+    # local_visual_pose = (visual_shape_data[link_index][5], visual_shape_data[link_index][6])
+
+    print(link_index,world_link_pose)
+
+    return p.multiplyTransforms(world_link_pose[0],
+                                world_link_pose[1],
+                                local_visual_pose[0],
+                                local_visual_pose[1])
+
 
 def update_visual_objects(object_ids, pkg_path, nv_objects=None,i_frame=-1):
     
@@ -428,7 +496,21 @@ def update_visual_objects(object_ids, pkg_path, nv_objects=None,i_frame=-1):
 
             m2[:3, 3] = local_visual_frame_position
             m2[:3, :3] = pyrr.matrix44.create_from_quaternion(local_visual_frame_orientation)[:3, :3]
-            m = m1 @ m2
+
+            if "rot_x" in config_file:
+                m = pyrr.Matrix44.from_x_rotation(config_file.rot_x) @ m1 @ m2 
+            else:
+                m = m1 @ m2
+            # print(object_id,linkIndex)
+            # local_visual_frame_position,local_visual_frame_orientation = \
+            #     get_world_visual_pose(object_id,linkIndex)
+
+            # m = np.eye(4)
+
+            # m[:3, 3] = local_visual_frame_position
+            # m[:3, :3] = pyrr.matrix44.create_from_quaternion(local_visual_frame_orientation)[:3, :3]
+
+            # print(m)
 
             bpy.ops.object.select_all(action='DESELECT')
             nv_objects[object_name].select_set(True)
@@ -504,6 +586,8 @@ numJoints = p.getNumJoints(robot)
 # Generate random joint poses
 random_joint_poses = np.random.rand(num_joints) * 2.0 - 1.0  # Random values between -1 and 1
 
+# random_joint_poses = np.zeros(num_joints)
+
 # Set the joint poses
 for joint_index in range(num_joints):
     joint_info = p.getJointInfo(robot, joint_index)
@@ -528,7 +612,9 @@ for joint_index in range(num_joints):
 nv_objects = update_visual_objects([robot], "")
 nv_objects = update_visual_objects([robot], ".", nv_objects)
 
+bpy.ops.wm.save_as_mainfile(filepath=f"{config_file.output_path}/urdf.blend")
 
+# raise()
 
 # Initialize target positions with current positions
 joint_targets = [p.getJointState(robot, i)[0] for i in range(num_joints)]

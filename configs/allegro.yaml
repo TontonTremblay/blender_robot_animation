@@ -6,11 +6,11 @@ render:
   camera:
     distance_center: 0.55
 content:
-  urdf_content_path: "/Users/jtremblay/code/blender_robot_animation/models/differentiable-robot-model/diff_robot_data/allegro/"
-  urdf_path: "urdf/allegro_hand_description_left.urdf"
-  hdri_env_map: "/Users/jtremblay/code/blender_robot_animation/models/hdris/"
-  materials_path: "/Users/jtremblay/code/holodeck_blender/assets/textures/"
-output_path: "/Users/jtremblay/code/blender_robot_animation/renders/allegro/"
+  urdf_content_path: ${base.base_path}/models/differentiable-robot-model/diff_robot_data/allegro/
+  urdf_path: urdf/allegro_hand_description_left.urdf
+  hdri_env_map: ${base.base_path}/models/hdris/
+  materials_path: /Users/jtremblay/code/holodeck_blender/assets/textures/
+output_path: ${base.base_path}/renders/allegro/
 nb_bullet_steps: 10
 random_materials: True
 offset: [0,0,0]
