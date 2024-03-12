@@ -1,0 +1,25 @@
+base: configs/base.yaml
+seed: 11414
+render:
+  nb_frames: 600 
+  resolution: 1024
+  camera:
+    distance_center: 4.
+content:
+  urdf_content_path: ${base.base_path}models/poppy_ergo_jr_description/
+  urdf_path: urdf/poppy_ergo_jr.urdf
+  hdri_env_map: ${base.base_path}models/hdris/
+  materials_path: /Users/jtremblay/code/holodeck_blender/assets/textures/
+output_path: ${base.base_path}renders/poppy/
+nb_bullet_steps: 100
+random_materials: False
+offset: [0,0,0.2]
+amplitude_camera: 0.3
+prob_change_pose: 0.08
+step_size: 0.003
+rot_x: 0
+# test
+test_scene: False
+test_every_frame: 10
+nb_cameras: 6
+ignore_list: []

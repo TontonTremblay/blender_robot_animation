@@ -1,0 +1,23 @@
+base: configs/base.yaml
+seed: 1923442
+render:
+  nb_frames: 600 
+  resolution: 1024
+  camera:
+    distance_center: 4
+content:
+  urdf_content_path: ${base.base_path}/models/rtmros_nextage/nextage_description/
+  urdf_path: urdf/NextageOpen.urdf
+  hdri_env_map: ${base.base_path}/models/hdris/
+  materials_path: /Users/jtremblay/code/holodeck_blender/assets/textures/
+output_path: ${base.base_path}/renders/nextage_test/
+nb_bullet_steps: 10
+random_materials: True
+offset: [0,0,-0.2]
+amplitude_camera: 0.4
+prob_change_pose: 0.15
+step_size: 0.04
+rot_x: -1.5708
+# test
+test_scene: True
+nb_cameras: 6

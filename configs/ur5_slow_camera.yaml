@@ -1,0 +1,25 @@
+base: configs/base.yaml
+seed: 151
+render:
+  nb_frames: 1200
+  resolution: 1024
+  camera:
+    distance_center: 2.9
+content:
+  urdf_content_path: ${base.base_path}/models/example-robot-data/robots/ur_description/
+  urdf_path: urdf/ur5_robot.urdf
+  hdri_env_map: ${base.base_path}/models/hdris/
+  materials_path: /Users/jtremblay/code/holodeck_blender/assets/textures/
+output_path: ${base.base_path}/renders/ur5_slow_camera/
+nb_bullet_steps: 10
+random_materials: False
+offset: [0,0,0]
+amplitude_camera: 0.2
+prob_change_pose: 0.1
+step_size: 0.05
+rot_x: 0
+# test
+test_scene: True
+test_every_frame: 10
+nb_cameras: 6
+ignore_list: [0,1,2,4,5,6]
