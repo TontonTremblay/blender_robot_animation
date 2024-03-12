@@ -1,5 +1,5 @@
 base: configs/base.yaml
-seed: 1978
+seed: 1951
 render:
   nb_frames: 600 
   resolution: 1024
@@ -10,11 +10,16 @@ content:
   urdf_path: urdf/anymal.urdf
   hdri_env_map: ${base.base_path}/models/hdris/
   materials_path: /Users/jtremblay/code/holodeck_blender/assets/textures/
-output_path: ${base.base_path}/renders/anymal/
+output_path: ${base.base_path}/renders/animal/
 nb_bullet_steps: 10
 random_materials: False
 offset: [0,0,0]
 amplitude_camera: 0.4
 prob_change_pose: 0.1
-step_size: 0.03
+step_size: 0.005
 rot_x: 0
+# test
+test_scene: True
+test_every_frame: 10
+nb_cameras: 6
+ignore_list: []

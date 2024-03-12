@@ -220,7 +220,7 @@ render.resolution_x = RESOLUTION
 render.resolution_y = RESOLUTION
 render.resolution_percentage = 100
 bpy.context.scene.cycles.filter_width = 0.01
-# bpy.context.scene.render.film_transparent = True
+bpy.context.scene.render.film_transparent = True
 
 bpy.context.scene.cycles.device = 'GPU'
 bpy.context.scene.cycles.diffuse_bounces = 1
@@ -421,7 +421,13 @@ def update_visual_objects(object_ids, pkg_path, nv_objects=None,i_frame=-1):
                             print(obj.name)
                             obj.select_set(True)
                     # Join selected mesh objects
+                    if len(bpy.context.selected_objects) == 0:
+                        continue
+                    bpy.ops.wm.save_as_mainfile(filepath=f"{config_file.output_path}/urdf.blend")
+                    # override = {'selected_objects': bpy.context.selected_objects}
+                    bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
                     bpy.ops.object.join()
+                    # bpy.ops.object.join(override)
 
                     bpy.ops.object.shade_smooth(use_auto_smooth=True)
                             
@@ -612,20 +618,59 @@ for joint_index in range(num_joints):
 nv_objects = update_visual_objects([robot], "")
 nv_objects = update_visual_objects([robot], ".", nv_objects)
 
-bpy.ops.wm.save_as_mainfile(filepath=f"{config_file.output_path}/urdf.blend")
+
+if config_file.random_materials: 
+    for obj_name in nv_objects:
+        obj = nv_objects[obj_name]
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj 
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        # # Select the geometry
+        bpy.ops.mesh.select_all(action='SELECT')
+        # # Call the smart project operator
+        bpy.ops.uv.smart_project()
+        # # Toggle out of Edit Mode
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        adding_material = True
+        while adding_material:
+            try:
+                path = all_textures[np.random.randint(0,len(all_textures)-1)]
+                print(path)
+                add_material(obj,path)
+                adding_material = False
+            except:
+                pass
+
+
 
 # raise()
+
+# timeStep = 1.0/240  # Adjust the time step of the simulation. Smaller values can lead to more accurate simulations
+# numSolverIterations = 150  # Increase the solver iterations for better stability and accuracy
+
+# p.setTimeStep(timeStep)
+# p.setPhysicsEngineParameter(numSolverIterations=numSolverIterations)
 
 # Initialize target positions with current positions
 joint_targets = [p.getJointState(robot, i)[0] for i in range(num_joints)]
 nb_frames = config_file.render.nb_frames
 step_per_frame = config_file.nb_bullet_steps
 
+if config_file.test_scene: 
+    np.seed = config_file.seed +10
+
+
 for i_frame in range(nb_frames):
     # Randomly decide new targets for some joints
     for i in range(num_joints):
         if np.random.rand() < config_file.prob_change_pose:  # 10% chance to update target for each joint
-            joint_targets[i] = np.random.uniform(limits[i][0], limits[i][1])
+            if i in config_file.ignore_list:
+                joint_targets[i] = joint_targets[i]
+            else:
+                joint_targets[i] = np.random.uniform(limits[i][0], limits[i][1])
     
     # Move towards the new targets smoothly
     for _ in range(step_per_frame):
@@ -643,60 +688,9 @@ for i_frame in range(nb_frames):
 
 
 
-# jointPoses = None
-# previous_pose = None
-# old_velocity = None
-# current_vel_joints = None
-# jointPoses = []
-# for i_joint in range(num_joints):
-#     jointPoses.append(np.random.uniform(low=limits[i_joint][0],high=limits[i_joint][1]))
-
-
-# for i_frame in range(NB_FRAMES):
-#     joint_now = []
-
-#     for i in range(numJoints):
-#         # print(p.getJointStates(robot,i))
-#         joint_now.append(p.getJointState(robot,i)[0])
-
-#     if jointPoses:
-#         # print(np.linalg.norm(np.array(jointPoses)-np.array(joint_now)))
-#         old_velocity = current_vel_joints
-#         current_vel_joints = np.linalg.norm(np.array(jointPoses)-np.array(joint_now))
-
-    
-#     for i_joint in range(numJoints):
-#         vel = np.abs(np.array(jointPoses) - np.array(joint_now))
-#         if vel[i_joint] < config_file.velocity_min:
-#             # Smooth transition towards new target position
-#             target_pos = np.random.uniform(low=limits[i_joint][0], high=limits[i_joint][1])
-#             step_size = config_file.velocity_max * 1  # Define velocity_max in your config
-#             direction = np.sign(target_pos - jointPoses[i_joint])
-#             jointPoses[i_joint] += direction * min(step_size, abs(target_pos - jointPoses[i_joint]))
-
-
-#     for i_joint in range(numJoints):
-#         p.setJointMotorControl2(bodyIndex=robot,
-#                                 jointIndex=i_joint,
-#                                 controlMode=p.POSITION_CONTROL,
-#                                 targetPosition=jointPoses[i_joint],
-#                                 targetVelocity=0,
-#                                 force=config_file.force_movement,
-#                                 positionGain=config_file.position_gain,
-#                                 velocityGain=0.1)
-#     for steps in range(config_file.nb_bullet_steps):
-#         p.stepSimulation()
 
 
 
-#     nv_objects = update_visual_objects([robot], ".", nv_objects, i_frame = i_frame)
-    
-
-
-
-
-
-bpy.ops.wm.save_as_mainfile(filepath=f"{config_file.output_path}/urdf.blend")
 
 
 
@@ -758,20 +752,22 @@ node_environment.image = bpy.data.images.load(skybox_random_selection) # Relativ
 
 world.node_tree.links.new(node_environment.outputs["Color"], bg.inputs["Color"])
 
-# add a camera 
-bpy.ops.object.camera_add(location=(0, 0, 0))  # Set the initial location of the camera
-camera_object = bpy.context.object
-camera_object.name = 'Camera'  # Rename the camera object to 'Camera'
-bpy.context.scene.camera = camera_object  # Set the scene's active camera to the newly added camera
-
-track_to_constraint = camera_object.constraints.new(type='TRACK_TO')
-
 # Create a new empty object
 bpy.ops.object.empty_add(location=config_file.offset)
-new_empty = bpy.context.active_object
-new_empty.name = 'target'
+track_camera = bpy.context.active_object
+track_camera.name = 'target'
 
-track_to_constraint.target = new_empty
+
+    
+
+bpy.ops.object.camera_add(location=(0, 0, 0))  # Set the initial location of the camera
+camera_object_moving = bpy.context.object
+camera_object_moving.name = 'Camera'  # Rename the camera object to 'Camera'
+bpy.context.scene.camera = camera_object_moving  # Set the scene's active camera to the newly added camera
+
+track_to_constraint = camera_object_moving.constraints.new(type='TRACK_TO')
+track_to_constraint.target = track_camera
+
 
 radius = 1.0
 
@@ -789,40 +785,42 @@ z_line = radius * np.cos(phi)
 
 
 for i in range(config_file.render.nb_frames):
-    camera_object.location.x = x_line[i]*config_file.render.camera.distance_center + config_file.offset[0]
-    camera_object.location.y = y_line[i]*config_file.render.camera.distance_center + config_file.offset[1]
-    camera_object.location.z = z_line[i]*config_file.render.camera.distance_center + config_file.offset[2] 
+    camera_object_moving.location.x = x_line[i]*config_file.render.camera.distance_center + config_file.offset[0]
+    camera_object_moving.location.y = y_line[i]*config_file.render.camera.distance_center + config_file.offset[1]
+    camera_object_moving.location.z = z_line[i]*config_file.render.camera.distance_center + config_file.offset[2] 
     
-    camera_object.keyframe_insert(data_path='location', frame=i)
+    camera_object_moving.keyframe_insert(data_path='location', frame=i)
 
 
 all_textures = glob.glob(config_file.content.materials_path+"*/")
 
-if config_file.random_materials: 
-    for obj_name in nv_objects:
-        obj = nv_objects[obj_name]
-        bpy.ops.object.select_all(action='DESELECT')
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj 
+# test camera
+if config_file.test_scene:
 
-        bpy.ops.object.mode_set(mode='EDIT')
-        # # Select the geometry
-        bpy.ops.mesh.select_all(action='SELECT')
-        # # Call the smart project operator
-        bpy.ops.uv.smart_project()
-        # # Toggle out of Edit Mode
-        bpy.ops.object.mode_set(mode='OBJECT')
+    points_circle = []
+    for i in range(config_file.nb_cameras):
+        theta = 2 * np.pi * i / config_file.nb_cameras  # Angle for the current point
+        x = np.cos(theta)   # X coordinate
+        y = np.sin(theta)  # Y coordinate
+        points_circle.append((x, y))
 
-        adding_material = True
-        while adding_material:
-            try:
-                path = all_textures[np.random.randint(0,len(all_textures)-1)]
-                print(path)
-                add_material(obj,path)
-                adding_material = False
-            except:
-                pass
 
+    all_cameras = []
+    for i_camera in range(config_file.nb_cameras):
+        # add a camera 
+
+        bpy.ops.object.camera_add(location=(0, 0, 0))  
+        camera_object = bpy.context.object
+        camera_object.name = f'Camera_{str(i_camera)}'  # Rename the camera object to 'Camera'
+        all_cameras.append(camera_object)
+        bpy.context.scene.camera = camera_object  # Set the scene's active camera to the newly added camera
+
+        track_to_constraint = camera_object.constraints.new(type='TRACK_TO')
+
+        track_to_constraint.target = track_camera
+        camera_object.location.x = points_circle[i_camera][0]*config_file.render.camera.distance_center + config_file.offset[0]
+        camera_object.location.y = points_circle[i_camera][1]*config_file.render.camera.distance_center + config_file.offset[1]
+        camera_object.location.z = 0 + config_file.offset[2] 
 
 
 ########################
@@ -926,6 +924,10 @@ bpy.context.window.scene = bpy.data.scenes['Scene']
 ########################
 ########################
 
+
+# TODO HERE. 
+
+
 # Set the scene camera (ensure a camera is selected)
 scene = bpy.context.scene
 if scene.camera is None and bpy.context.selected_objects:
@@ -943,12 +945,13 @@ for area in bpy.context.screen.areas:
 
 bpy.context.scene.render.filepath = config_file.output_path
 bpy.ops.wm.save_as_mainfile(filepath=f"{config_file.output_path}/urdf.blend")
-
-
 # raise()
 
 
 for i in range(NB_FRAMES):
+    if i >= 600: 
+        break
+    bpy.context.scene.camera = camera_object_moving
     to_add = render_single_image(
         frame_set = i, 
         path = config_file.output_path,
@@ -957,7 +960,36 @@ for i in range(NB_FRAMES):
         resolution = 1024, 
     )
 
+    # raise()
+    if config_file.test_scene and i % config_file.test_every_frame == 0: 
+        for i_cam in range(config_file.nb_cameras):
+            bpy.context.scene.camera = all_cameras[i_cam]  # Set the scene's active camera to the newly added camera
 
+            to_add = render_single_image(
+                frame_set = i, 
+                path = f"{config_file.output_path}/test/",
+                save_segmentation = True,  
+                save_depth = True, 
+                resolution = 1024, 
+                suffix_naming = f"_{str(i_cam)}",
+
+            )
+        # export mesh 
+        file_path = f"{config_file.output_path}/test/{str(i).zfill(3)}.obj" 
+
+        # Set up export settings
+        export_settings = {
+            "filepath": file_path,
+            "export_selected_objects": False,
+            "export_animation": False,
+            "apply_modifiers": True,
+            "export_materials":False,
+        }
+
+        # Execute the export operation
+        bpy.ops.wm.obj_export(**export_settings)
+
+    # raise()
 
 
 ########################

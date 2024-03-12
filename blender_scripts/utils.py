@@ -480,7 +480,8 @@ def export_meta_data_2_json(
     segmentation_mask = None,
     scene_aabb = [],
     path = "",
-    i_pos = 0
+    i_pos = 0,
+    suffix_naming = "",
     ):
     global DATA_EXPORT
     data = DATA_EXPORT
@@ -559,11 +560,11 @@ def export_meta_data_2_json(
 
     # load the segmentation & find unique pixels
 
-    if not segmentation_mask is None or os.path.exists(f'{path}/{str(i_pos).zfill(3)}_seg.exr'):
+    if not segmentation_mask is None or os.path.exists(f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_seg.exr'):
         # segmentation_mask = bpy.data.images.load(f'{path}/{str(i_pos).zfill(3)}_seg.exr')
         # segmentation_mask = bpy.ops.image.open(filepath=f'{path}/{str(i_pos).zfill(3)}_seg.exr')
         from bpy_extras.image_utils import load_image
-        segmentation_mask = load_image(f'{path}/{str(i_pos).zfill(3)}_seg.exr')
+        segmentation_mask = load_image(f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_seg.exr')
 
         segmentation_mask = np.asarray(segmentation_mask.pixels)
         segmentation_mask = segmentation_mask.reshape((width,height,4))[:,:,:3]
@@ -621,6 +622,24 @@ def export_meta_data_2_json(
             projected_keypoints.append([co_2d.x * render_size[0],height - co_2d.y * render_size[1]])
      
             # projected_keypoints = [[-1,-1]]
+
+
+        co_2d = bpy_extras.object_utils.world_to_camera_view(
+            bpy.context.scene, 
+            camera_ob, 
+            obj.matrix_world.translation
+        )
+
+        # If you want pixel coords
+        render_scale = scene.render.resolution_percentage / 100
+        render_size = (int(scene.render.resolution_x * render_scale),
+                       int(scene.render.resolution_y * render_scale),
+                    )
+        projected_obj_origin =[co_2d.x * render_size[0],height - co_2d.y * render_size[1]]
+
+     
+         
+
         #check if the object is visible
         visibility = -1
         bounding_box = [-1,-1,-1,-1]
@@ -694,6 +713,7 @@ def export_meta_data_2_json(
             'local_cuboid': cuboid,
             'visibility':visibility,
             'bounding_box_minx_maxx_miny_maxy':[minx,maxx,miny,maxy],
+            'projected_obj_origin':projected_obj_origin
         })
         # dict_out['objects'][-1]['segmentation_id']=data[obj_name]["color_seg"]
         for key in data[obj_name].keys():
@@ -723,39 +743,32 @@ def render_single_image(
     save_segmentation = True,
     save_depth = True,
     resolution = 500,
+    save_mesh = False,
+    suffix_naming = ''
     ): 
     global DATA_EXPORT, depth_file_output,flow_file_output
     i_pos = frame_set
+    camera_name = bpy.context.scene.camera.name
 
     bpy.context.window.scene = bpy.data.scenes['segmentation']
     bpy.context.scene.frame_set(frame_set)
 
+    bpy.context.scene.camera = bpy.data.objects[camera_name+".001"]    
+
     bpy.context.scene.render.resolution_x = resolution  # Width
     bpy.context.scene.render.resolution_y = resolution  # Height
-
-    obj_camera = bpy.context.scene.objects['Camera.001']
     
-    # print(look_at_data)
-    # raise()
-    if not look_at_data is None:
-        obj_camera.location = (
-            (look_at_data['eye'][0]),
-            (look_at_data['eye'][1]),
-            (look_at_data['eye'][2])
-            )
-        bpy.context.view_layer.update()
-        look_at(obj_camera,look_at_data['at'])
 
-        bpy.context.view_layer.update()
-
-    depth_file_output.file_slots[0].path = f'{path}/{str(i_pos).zfill(3)}_depth'
-    flow_file_output.file_slots[0].path = f'{path}/{str(i_pos).zfill(3)}_flow'
-    bpy.context.scene.render.filepath = f'{path}/{str(i_pos).zfill(3)}_seg.exr'
+    depth_file_output.file_slots[0].path = f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_depth'
+    flow_file_output.file_slots[0].path = f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_flow'
+    bpy.context.scene.render.filepath = f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_seg.exr'
     
     bpy.ops.render.render(write_still = True)
 
-    os.rename(f'{path}/{str(i_pos).zfill(3)}_depth{str(bpy.context.window.scene.frame_current).zfill(4)}.exr', f'{path}/{str(i_pos).zfill(3)}_depth.exr') 
-    os.rename(f'{path}/{str(i_pos).zfill(3)}_flow{str(bpy.context.window.scene.frame_current).zfill(4)}.exr', f'{path}/{str(i_pos).zfill(3)}_flow.exr') 
+    os.rename(f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_depth{str(bpy.context.window.scene.frame_current).zfill(4)}.exr', 
+        f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_depth.exr') 
+    os.rename(f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_flow{str(bpy.context.window.scene.frame_current).zfill(4)}.exr', 
+        f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_flow.exr') 
 
     bpy.context.window.scene = bpy.data.scenes['Scene']
     bpy.context.scene.render.resolution_x = resolution  # Width
@@ -763,46 +776,33 @@ def render_single_image(
 
     bpy.context.scene.frame_set(frame_set)
 
-    if not look_at_data is None:
-        obj_camera = bpy.context.scene.objects['Camera']
-        obj_camera.location = (
-            (look_at_data['eye'][0]),
-            (look_at_data['eye'][1]),
-            (look_at_data['eye'][2])
-            )
-        bpy.context.view_layer.update()
-        
-        look_at(obj_camera,look_at_data['at'])
-
-        bpy.context.view_layer.update()
-
-    # change the scene 
 
 
     export_meta_data_2_json(
-        f"{path}/{str(i_pos).zfill(3)}.json",
+        f"{path}/{str(i_pos).zfill(3)}{suffix_naming}.json",
         width = resolution,
         height = resolution,
-        camera_ob = obj_camera,
+        camera_ob = bpy.context.scene.camera,
         data = DATA_EXPORT,
         camera_struct = look_at_data,
-        segmentation_mask = f'{path}/{str(i_pos).zfill(3)}_seg.png',
+        segmentation_mask = f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_seg.exr',
         scene_aabb = [],
         path = path,
         i_pos = i_pos,
+        suffix_naming= suffix_naming
     )
     
     # if no depth or no segmentation to be saved.
     if not save_segmentation:
-        os.remove(f'{path}/{str(i_pos).zfill(3)}_seg.exr')
+        os.remove(f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_seg.exr')
         # threading.Thread(os.remove, f'{path}/{str(i_pos).zfill(3)}_seg.exr').start()
     if not save_depth:
-        os.remove(f'{path}/{str(i_pos).zfill(3)}_depth.exr')
+        os.remove(f'{path}/{str(i_pos).zfill(3)}{suffix_naming}_depth.exr')
         # threading.Thread(os.remove, f'{path}/{str(i_pos).zfill(3)}_depth.exr').start()
 
 
-    rt = get_3x4_RT_matrix_from_blender(obj_camera)
-    pos, rt, scale = obj_camera.matrix_world.decompose()
+    rt = get_3x4_RT_matrix_from_blender(bpy.context.scene.camera)
+    pos, rt, scale = bpy.context.scene.camera.matrix_world.decompose()
     rt = rt.to_matrix()
     matrix = []
     for i in range(3):
@@ -822,10 +822,10 @@ def render_single_image(
     # print(matrix)
 
     to_add = {\
-        "file_path":f'{str(i_pos).zfill(3)}.png',
+        "file_path":f'{str(i_pos).zfill(3)}{suffix_naming}.png',
         "transform_matrix":matrix
     }
     
-    bpy.context.scene.render.filepath = f'{path}/{str(i_pos).zfill(3)}.png'
+    bpy.context.scene.render.filepath = f'{path}/{str(i_pos).zfill(3)}{suffix_naming}.png'
     bpy.ops.render.render(write_still = True)
     return to_add

@@ -18,3 +18,6 @@ amplitude_camera: 0.4
 prob_change_pose: 0.1
 step_size: 0.03
 rot_x: 0
+# test
+test_scene: False
+nb_cameras: 6

@@ -16,4 +16,10 @@ random_materials: False
 offset: [0,0,0.2]
 amplitude_camera: 0.3
 prob_change_pose: 0.08
-step_size: 0.01
+step_size: 0.003
+rot_x: 0
+# test
+test_scene: True
+test_every_frame: 10
+nb_cameras: 6
+ignore_list: []

@@ -17,3 +17,9 @@ offset: [0,0,0]
 amplitude_camera: 0.3
 prob_change_pose: 0.1
 step_size: 0.05
+rot_x: 0
+# test
+test_scene: True
+test_every_frame: 10
+nb_cameras: 6
+ignore_list: []

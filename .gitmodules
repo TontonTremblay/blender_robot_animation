@@ -19,3 +19,12 @@
 [submodule "models/rtmros_nextage"]
 	path = models/rtmros_nextage
 	url = git@github.com:tork-a/rtmros_nextage.git
+[submodule "models/poppy_ergo_jr_description"]
+	path = models/poppy_ergo_jr_description
+	url = https://github.com/poppy-project/poppy_ergo_jr_description.git
+[submodule "models/icub-models"]
+	path = models/icub-models
+	url = git@github.com:robotology/icub-models.git
+[submodule "models/example-robot-data"]
+	path = models/example-robot-data
+	url = git@github.com:Gepetto/example-robot-data.git
