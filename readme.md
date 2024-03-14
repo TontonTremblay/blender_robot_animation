@@ -1,6 +1,7 @@
 # Animated robot with rotating camera
 
-<img width="406" alt="image" src="https://github.com/TontonTremblay/blender_robot_animation/assets/5629088/8d9e4acc-b926-4a72-9cb0-df3c54cd92f4">
+![data_gen](https://github.com/TontonTremblay/blender_robot_animation/assets/5629088/4cdb74ff-505b-47f0-8f54-b90a1702d419)
+
 
 
 You need to specify the path to blender in the config file, `configs/base.yaml`. This is where the absolute path to this code folder should be set. Each robot file loads this to populate the base paths. 
